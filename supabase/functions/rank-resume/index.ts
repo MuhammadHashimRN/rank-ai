@@ -1,9 +1,34 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Helper function to normalize skills using the database function
+async function normalizeSkills(skills: string[]): Promise<string[]> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  
+  const normalized: string[] = [];
+  
+  for (const skill of skills) {
+    const { data, error } = await supabase.rpc('normalize_skill', { 
+      skill_name: skill 
+    });
+    
+    if (!error && data) {
+      normalized.push(data);
+    } else {
+      // Fallback to original skill if normalization fails
+      normalized.push(skill.trim());
+    }
+  }
+  
+  return normalized;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -35,12 +60,20 @@ serve(async (req) => {
       ruleScore += Math.max(0, 30 - (diff * 5));
     }
 
-    // Check skills match
-    const candidateSkills = (resume.parsed_skills || []).map((s: string) => s.toLowerCase());
-    const requiredSkills = (job.required_skills || []).map((s: string) => s.toLowerCase());
+    // Check skills match with normalization
+    const rawCandidateSkills = resume.parsed_skills || [];
+    const rawRequiredSkills = job.required_skills || [];
     
-    const matchedSkills = requiredSkills.filter((rs: string) => 
-      candidateSkills.some((cs: string) => cs.includes(rs) || rs.includes(cs))
+    // Normalize both candidate and job skills
+    const candidateSkills = await normalizeSkills(rawCandidateSkills);
+    const requiredSkills = await normalizeSkills(rawRequiredSkills);
+    
+    // Case-insensitive comparison of normalized skills
+    const candidateSkillsLower = candidateSkills.map((s: string) => s.toLowerCase());
+    const requiredSkillsLower = requiredSkills.map((s: string) => s.toLowerCase());
+    
+    const matchedSkills = requiredSkillsLower.filter((rs: string) => 
+      candidateSkillsLower.includes(rs)
     );
     
     const skillMatchPercentage = requiredSkills.length > 0 
@@ -63,7 +96,7 @@ Required Skills: ${requiredSkills.join(", ")}
 
 Candidate:
 Name: ${resume.parsed_name}
-Skills: ${candidateSkills.join(", ")}
+Skills: ${candidateSkills.join(", ")} (normalized from: ${rawCandidateSkills.join(", ")})
 Experience: ${candidateExp} years
 Education: ${JSON.stringify(resume.parsed_education)}
 

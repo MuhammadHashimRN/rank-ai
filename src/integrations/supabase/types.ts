@@ -260,6 +260,27 @@ export type Database = {
           },
         ]
       }
+      skill_synonyms: {
+        Row: {
+          canonical_skill: string
+          created_at: string
+          id: string
+          synonym: string
+        }
+        Insert: {
+          canonical_skill: string
+          created_at?: string
+          id?: string
+          synonym: string
+        }
+        Update: {
+          canonical_skill?: string
+          created_at?: string
+          id?: string
+          synonym?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -300,6 +321,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      normalize_skill: {
+        Args: { skill_name: string }
+        Returns: string
       }
     }
     Enums: {

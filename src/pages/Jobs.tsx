@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Briefcase, Plus, Trash2, Edit, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { SkillInput } from "@/components/SkillInput";
 
 interface Job {
   id: string;
@@ -27,7 +28,7 @@ const Jobs = () => {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    required_skills: "",
+    required_skills: [] as string[],
     required_experience: "0",
     required_degree: ""
   });
@@ -70,7 +71,7 @@ const Jobs = () => {
       const { error } = await supabase.from("jobs").insert({
         title: formData.title,
         description: formData.description,
-        required_skills: formData.required_skills.split(",").map(s => s.trim()),
+        required_skills: formData.required_skills,
         required_experience: parseInt(formData.required_experience),
         required_degree: formData.required_degree || null,
         created_by: user?.id
@@ -83,7 +84,7 @@ const Jobs = () => {
       setFormData({
         title: "",
         description: "",
-        required_skills: "",
+        required_skills: [],
         required_experience: "0",
         required_degree: ""
       });
@@ -159,13 +160,12 @@ const Jobs = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Required Skills (comma-separated)
+                    Required Skills
                   </label>
-                  <Input
-                    required
+                  <SkillInput
                     value={formData.required_skills}
-                    onChange={(e) => setFormData({ ...formData, required_skills: e.target.value })}
-                    placeholder="React, TypeScript, Node.js"
+                    onChange={(skills) => setFormData({ ...formData, required_skills: skills })}
+                    placeholder="Type to search and add skills..."
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
