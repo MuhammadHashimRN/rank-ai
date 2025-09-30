@@ -14,16 +14,232 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          required_degree: string | null
+          required_experience: number
+          required_skills: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          required_degree?: string | null
+          required_experience?: number
+          required_skills?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          required_degree?: string | null
+          required_experience?: number
+          required_skills?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      ranking_logs: {
+        Row: {
+          created_at: string
+          explanation: string
+          id: string
+          job_id: string
+          resume_id: string
+          score: number
+        }
+        Insert: {
+          created_at?: string
+          explanation: string
+          id?: string
+          job_id: string
+          resume_id: string
+          score: number
+        }
+        Update: {
+          created_at?: string
+          explanation?: string
+          id?: string
+          job_id?: string
+          resume_id?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ranking_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ranking_logs_resume_id_fkey"
+            columns: ["resume_id"]
+            isOneToOne: false
+            referencedRelation: "resumes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resumes: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          linked_job_id: string | null
+          parsed_certifications: string[] | null
+          parsed_education: Json | null
+          parsed_email: string | null
+          parsed_experience: number | null
+          parsed_name: string | null
+          parsed_phone: string | null
+          parsed_projects: Json | null
+          parsed_skills: string[] | null
+          ranking_score: number | null
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          linked_job_id?: string | null
+          parsed_certifications?: string[] | null
+          parsed_education?: Json | null
+          parsed_email?: string | null
+          parsed_experience?: number | null
+          parsed_name?: string | null
+          parsed_phone?: string | null
+          parsed_projects?: Json | null
+          parsed_skills?: string[] | null
+          ranking_score?: number | null
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          linked_job_id?: string | null
+          parsed_certifications?: string[] | null
+          parsed_education?: Json | null
+          parsed_email?: string | null
+          parsed_experience?: number | null
+          parsed_name?: string | null
+          parsed_phone?: string | null
+          parsed_projects?: Json | null
+          parsed_skills?: string[] | null
+          ranking_score?: number | null
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resumes_linked_job_id_fkey"
+            columns: ["linked_job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resumes_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "recruiter"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +366,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "recruiter"],
+    },
   },
 } as const
