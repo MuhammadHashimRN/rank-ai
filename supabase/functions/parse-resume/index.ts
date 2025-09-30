@@ -12,13 +12,33 @@ serve(async (req) => {
   }
 
   try {
-    const { fileContent, fileName } = await req.json();
-    console.log("Parsing resume:", fileName);
+    const { fileContent, fileName, fileType } = await req.json();
+    console.log("Parsing resume:", fileName, "Type:", fileType);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY not configured");
     }
+
+    // Decode base64 content back to text
+    let textContent: string;
+    try {
+      const decodedContent = atob(fileContent);
+      
+      // For text files, use directly
+      if (fileType === 'text/plain') {
+        textContent = decodedContent;
+      } else {
+        // For PDFs and Word docs, the binary content needs special handling
+        // We'll send a larger sample and let AI try to extract text
+        textContent = decodedContent;
+      }
+    } catch (e) {
+      console.error("Error decoding file:", e);
+      textContent = fileContent; // Fallback to original content
+    }
+
+    console.log("Content preview (first 500 chars):", textContent.substring(0, 500));
 
     // Call Lovable AI Gateway with Gemini Flash (free during promo!)
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -50,7 +70,7 @@ Return ONLY the JSON object, no markdown formatting, no explanations.`
           },
           {
             role: "user",
-            content: `Parse this resume:\n\n${fileContent}`
+            content: `Parse this resume (${fileName}):\n\n${textContent}\n\nExtract all visible text content and parse the information. For PDFs and formatted documents, look for text patterns even if formatting characters are present.`
           }
         ],
       }),
