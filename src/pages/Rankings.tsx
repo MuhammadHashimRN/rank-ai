@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Minus, ArrowLeft, Mail, Phone, Briefcase } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, ArrowLeft, Mail, Phone, Briefcase, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Job {
   id: string;
@@ -111,6 +112,42 @@ const Rankings = () => {
     }
   };
 
+  const handleDelete = async (resumeId: string, resumeName: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click event
+    
+    if (!confirm(`Are you sure you want to delete ${resumeName}'s resume?`)) return;
+
+    try {
+      // Delete ranking logs first (foreign key constraint)
+      await supabase
+        .from("ranking_logs")
+        .delete()
+        .eq("resume_id", resumeId);
+
+      // Delete the resume
+      const { error } = await supabase
+        .from("resumes")
+        .delete()
+        .eq("id", resumeId);
+
+      if (error) throw error;
+
+      toast.success("Candidate deleted successfully!");
+      
+      // Clear selected resume if it was the deleted one
+      if (selectedResume === resumeId) {
+        setSelectedResume(null);
+        setRankingLog(null);
+      }
+      
+      // Reload the resumes list
+      loadResumes();
+    } catch (error) {
+      console.error("Error deleting candidate:", error);
+      toast.error("Failed to delete candidate");
+    }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-success";
     if (score >= 60) return "text-warning";
@@ -190,12 +227,22 @@ const Rankings = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className={`text-2xl font-bold flex items-center gap-1 ${getScoreColor(resume.ranking_score)}`}>
-                          <ScoreIcon className="h-6 w-6" />
-                          {resume.ranking_score}
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className={`text-2xl font-bold flex items-center gap-1 ${getScoreColor(resume.ranking_score)}`}>
+                            <ScoreIcon className="h-6 w-6" />
+                            {resume.ranking_score}
+                          </div>
+                          <p className="text-xs text-muted-foreground">Match Score</p>
                         </div>
-                        <p className="text-xs text-muted-foreground">Match Score</p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleDelete(resume.id, resume.parsed_name, e)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                     
