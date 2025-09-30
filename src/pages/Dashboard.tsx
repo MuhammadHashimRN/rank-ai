@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Briefcase, FileText, TrendingUp, Users, LogOut, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -126,6 +127,7 @@ const Dashboard = () => {
             <span className="text-sm text-muted-foreground">
               Role: <span className="font-medium text-foreground capitalize">{userRole}</span>
             </span>
+            <ThemeToggle />
             <Button variant="ghost" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
             </Button>
