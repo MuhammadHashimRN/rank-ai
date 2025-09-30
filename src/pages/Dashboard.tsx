@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Briefcase, FileText, TrendingUp, Users, LogOut, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AnalyticsCharts } from "@/components/AnalyticsCharts";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -16,11 +17,16 @@ const Dashboard = () => {
     avgScore: 0,
     recentActivity: 0
   });
+  const [analyticsData, setAnalyticsData] = useState({
+    skillsGap: [] as { skill: string; count: number }[],
+    scoreDistribution: [] as { range: string; count: number }[]
+  });
   const [userRole, setUserRole] = useState<string>("");
 
   useEffect(() => {
     checkAuth();
     loadStats();
+    loadAnalytics();
   }, []);
 
   const checkAuth = async () => {
@@ -30,7 +36,6 @@ const Dashboard = () => {
       return;
     }
 
-    // Get user role
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
@@ -65,6 +70,52 @@ const Dashboard = () => {
       console.error("Error loading stats:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    try {
+      // Get all resumes with skills and scores
+      const { data: resumes } = await supabase
+        .from("resumes")
+        .select("parsed_skills, ranking_score");
+
+      if (!resumes) return;
+
+      // Calculate skills gap (most needed skills across all candidates)
+      const skillCounts: Record<string, number> = {};
+      resumes.forEach(resume => {
+        resume.parsed_skills?.forEach((skill: string) => {
+          skillCounts[skill] = (skillCounts[skill] || 0) + 1;
+        });
+      });
+
+      const skillsGap = Object.entries(skillCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([skill, count]) => ({ skill, count }));
+
+      // Calculate score distribution
+      const scoreDistribution = [
+        { range: '0-20', count: 0 },
+        { range: '21-40', count: 0 },
+        { range: '41-60', count: 0 },
+        { range: '61-80', count: 0 },
+        { range: '81-100', count: 0 }
+      ];
+
+      resumes.forEach(resume => {
+        const score = resume.ranking_score || 0;
+        if (score <= 20) scoreDistribution[0].count++;
+        else if (score <= 40) scoreDistribution[1].count++;
+        else if (score <= 60) scoreDistribution[2].count++;
+        else if (score <= 80) scoreDistribution[3].count++;
+        else scoreDistribution[4].count++;
+      });
+
+      setAnalyticsData({ skillsGap, scoreDistribution });
+    } catch (error) {
+      console.error("Error loading analytics:", error);
     }
   };
 
@@ -157,6 +208,18 @@ const Dashboard = () => {
           ))}
         </div>
 
+        {stats.totalResumes > 0 && (
+          <Card className="p-6 mb-8">
+            <h3 className="text-2xl font-bold mb-4">Analytics & Insights</h3>
+            <AnalyticsCharts
+              resumeCount={stats.totalResumes}
+              avgScore={stats.avgScore}
+              skillsGap={analyticsData.skillsGap}
+              scoreDistribution={analyticsData.scoreDistribution}
+            />
+          </Card>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card className="p-6 hover:shadow-elegant transition-all cursor-pointer" onClick={() => navigate("/jobs")}>
             <div className="flex items-center gap-4 mb-4">
@@ -175,7 +238,7 @@ const Dashboard = () => {
               </div>
               <h3 className="text-xl font-semibold">Upload Resumes</h3>
             </div>
-            <p className="text-muted-foreground">Upload and analyze candidate resumes</p>
+            <p className="text-muted-foreground">Batch upload and analyze candidate resumes</p>
           </Card>
 
           <Card className="p-6 hover:shadow-elegant transition-all cursor-pointer" onClick={() => navigate("/rankings")}>
@@ -185,7 +248,7 @@ const Dashboard = () => {
               </div>
               <h3 className="text-xl font-semibold">View Rankings</h3>
             </div>
-            <p className="text-muted-foreground">See AI-powered candidate rankings</p>
+            <p className="text-muted-foreground">Advanced filtering, notes, and export</p>
           </Card>
         </div>
       </main>
