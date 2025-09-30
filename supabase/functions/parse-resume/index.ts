@@ -46,6 +46,9 @@ serve(async (req) => {
       console.log("Extracting text from PDF...");
       const pdfjsLib = await import("https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.min.mjs");
       
+      // Configure worker for pdfjs
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.worker.min.mjs";
+      
       const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
       const pdf = await loadingTask.promise;
       

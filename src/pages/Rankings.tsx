@@ -119,18 +119,20 @@ const Rankings = () => {
 
     try {
       // Delete ranking logs first (foreign key constraint)
-      await supabase
+      const { error: logsError } = await supabase
         .from("ranking_logs")
         .delete()
         .eq("resume_id", resumeId);
 
+      if (logsError) throw logsError;
+
       // Delete the resume
-      const { error } = await supabase
+      const { error: resumeError } = await supabase
         .from("resumes")
         .delete()
         .eq("id", resumeId);
 
-      if (error) throw error;
+      if (resumeError) throw resumeError;
 
       toast.success("Candidate deleted successfully!");
       
