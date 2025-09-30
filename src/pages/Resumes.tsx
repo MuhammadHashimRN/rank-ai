@@ -59,9 +59,9 @@ const Resumes = () => {
         return;
       }
       
-      // Validate file size (max 5MB)
-      if (selectedFile.size > 5 * 1024 * 1024) {
-        toast.error("File size must be less than 5MB");
+      // Validate file size (max 10MB)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        toast.error("File size must be less than 10MB");
         return;
       }
       
@@ -91,12 +91,19 @@ const Resumes = () => {
 
       if (uploadError) throw uploadError;
 
-      // Read file content for parsing
-      const fileContent = await file.text();
+      // Read file as base64 for better parsing of PDFs and Word docs
+      const arrayBuffer = await file.arrayBuffer();
+      const base64Content = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
 
       // Call parse-resume edge function
       const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
-        body: { fileContent, fileName: file.name }
+        body: { 
+          fileContent: base64Content, 
+          fileName: file.name,
+          fileType: file.type 
+        }
       });
 
       if (parseError) throw parseError;
@@ -237,7 +244,7 @@ const Resumes = () => {
                   className="cursor-pointer"
                 />
                 <p className="text-sm text-muted-foreground mt-2">
-                  PDF, DOC, DOCX, or TXT (max 5MB)
+                  PDF, DOC, DOCX, or TXT (max 10MB)
                 </p>
                 {file && (
                   <p className="text-sm font-medium text-primary mt-2">
