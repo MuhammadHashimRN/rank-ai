@@ -38,44 +38,40 @@ serve(async (req) => {
 
     console.log("File downloaded, size:", fileData.size);
 
-    // Extract text from the file based on type
-    const arrayBuffer = await fileData.arrayBuffer();
-    let textContent = "";
-
-    if (fileType === "application/pdf") {
-      console.log("Extracting text from PDF...");
-      const pdfjsLib = await import("https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.min.mjs");
+    // For PDFs and DOCX, send directly to Gemini as base64 (Gemini can read documents natively)
+    let aiContent: any;
+    
+    if (fileType === "application/pdf" || fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      console.log("Converting document to base64 for AI processing...");
+      const arrayBuffer = await fileData.arrayBuffer();
+      const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
       
-      // Configure worker for pdfjs
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.worker.min.mjs";
-      
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
-      const pdf = await loadingTask.promise;
-      
-      const textPages = [];
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        const pageText = content.items.map((item: any) => item.str).join(' ');
-        textPages.push(pageText);
-      }
-      textContent = textPages.join('\n\n');
-      console.log("PDF text extracted, length:", textContent.length);
-    } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      console.log("Processing DOCX file...");
-      // For DOCX, we'll use mammoth
-      const mammoth = await import("https://esm.sh/mammoth@1.8.0");
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      textContent = result.value;
-      console.log("DOCX text extracted, length:", textContent.length);
+      aiContent = [
+        {
+          type: "text",
+          text: `Parse this resume document (${fileName}) and extract ALL available information. Be thorough and check every section.`
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${fileType};base64,${base64Data}`
+          }
+        }
+      ];
+      console.log("Document converted to base64, length:", base64Data.length);
     } else {
       // For plain text files
-      textContent = await fileData.text();
+      const textContent = await fileData.text();
       console.log("Plain text extracted, length:", textContent.length);
-    }
+      
+      if (!textContent || textContent.trim().length < 10) {
+        throw new Error("Could not extract meaningful text from the file");
+      }
+      
+      aiContent = `Parse this resume (${fileName}) and extract ALL available information. Be thorough and check every section.
 
-    if (!textContent || textContent.trim().length < 10) {
-      throw new Error("Could not extract meaningful text from the file");
+Resume content:
+${textContent}`;
     }
 
     // Call Lovable AI Gateway with Gemini Flash
@@ -117,10 +113,7 @@ Return ONLY the JSON object, no markdown formatting, no explanations.`
           },
           {
             role: "user",
-            content: `Parse this resume (${fileName}) and extract ALL available information. Be thorough and check every section.
-
-Resume content:
-${textContent}`
+            content: aiContent
           }
         ],
       }),
