@@ -91,16 +91,17 @@ const Resumes = () => {
 
       if (uploadError) throw uploadError;
 
-      // Read file as base64 for better parsing of PDFs and Word docs
-      const arrayBuffer = await file.arrayBuffer();
-      const base64Content = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
+      // Get public URL for the file
+      const { data: urlData } = supabase.storage
+        .from("resumes")
+        .getPublicUrl(fileName);
 
-      // Call parse-resume edge function
+      // Call parse-resume edge function with storage path
+      toast.info("Parsing resume with AI...");
+      
       const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         body: { 
-          fileContent: base64Content, 
+          filePath: fileName,
           fileName: file.name,
           fileType: file.type 
         }
@@ -109,6 +110,8 @@ const Resumes = () => {
       if (parseError) throw parseError;
 
       const parsed = parseData.parsedData;
+      
+      console.log("Parsed data:", parsed);
 
       // Insert resume into database
       const { data: resumeData, error: insertError } = await supabase

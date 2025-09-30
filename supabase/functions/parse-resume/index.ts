@@ -12,35 +12,83 @@ serve(async (req) => {
   }
 
   try {
-    const { fileContent, fileName, fileType } = await req.json();
+    const { filePath, fileName, fileType } = await req.json();
     console.log("Parsing resume:", fileName, "Type:", fileType);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Required environment variables not configured");
     }
 
-    // Decode base64 content back to text
+    // Create Supabase client with service role to download file
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Download file from storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from("resumes")
+      .download(filePath);
+
+    if (downloadError) {
+      console.error("Error downloading file:", downloadError);
+      throw new Error("Failed to download file from storage");
+    }
+
+    console.log("File downloaded, size:", fileData.size);
+
     let textContent: string;
-    try {
-      const decodedContent = atob(fileContent);
-      
-      // For text files, use directly
-      if (fileType === 'text/plain') {
-        textContent = decodedContent;
-      } else {
-        // For PDFs and Word docs, the binary content needs special handling
-        // We'll send a larger sample and let AI try to extract text
-        textContent = decodedContent;
+
+    // Extract text based on file type
+    if (fileType === "application/pdf") {
+      try {
+        // Use pdf-parse from npm via esm.sh for PDF extraction
+        const pdfParse = (await import("https://esm.sh/pdf-parse@1.1.1")).default;
+        const arrayBuffer = await fileData.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const pdfData = await pdfParse(uint8Array);
+        textContent = pdfData.text;
+        console.log("PDF text extracted, length:", textContent.length, "pages:", pdfData.numpages);
+      } catch (pdfError) {
+        console.error("PDF extraction error:", pdfError);
+        throw new Error("Failed to extract text from PDF. The file may be encrypted or corrupted.");
       }
-    } catch (e) {
-      console.error("Error decoding file:", e);
-      textContent = fileContent; // Fallback to original content
+    } else if (fileType === "text/plain") {
+      textContent = await fileData.text();
+    } else if (
+      fileType === "application/msword" ||
+      fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      try {
+        // For .docx files, use mammoth
+        if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+          const mammoth = await import("https://esm.sh/mammoth@1.8.0");
+          const arrayBuffer = await fileData.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          textContent = result.value;
+          console.log("DOCX text extracted, length:", textContent.length);
+        } else {
+          // For .doc files, try to read as text (limited support)
+          textContent = await fileData.text();
+          console.log("DOC file read as text, length:", textContent.length);
+        }
+      } catch (docError) {
+        console.error("Word document extraction error:", docError);
+        throw new Error("Failed to extract text from Word document");
+      }
+    } else {
+      textContent = await fileData.text();
+    }
+
+    if (!textContent || textContent.trim().length < 50) {
+      console.warn("Extracted text is too short or empty. Preview:", textContent?.substring(0, 200));
+      throw new Error("Could not extract readable text from the document. Please ensure the file is not corrupted, encrypted, or password-protected.");
     }
 
     console.log("Content preview (first 500 chars):", textContent.substring(0, 500));
 
-    // Call Lovable AI Gateway with Gemini Flash (free during promo!)
+    // Call Lovable AI Gateway with Gemini Flash
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -66,11 +114,20 @@ Return format:
   "projects": [{"name": "...", "description": "...", "technologies": []}]
 }
 
+CRITICAL INSTRUCTIONS:
+- Extract ALL information present in the resume
+- For experience: count the TOTAL years based on all work/internship/project dates. If they are a student with no work experience, set to 0.
+- For skills: extract ALL technical and soft skills mentioned anywhere in the resume
+- For education: include ALL degrees, even if currently enrolled or in progress
+- Be thorough - do not return null/empty values if information clearly exists in the text
+- Look carefully for: name (usually at top), email addresses, phone numbers, university names, job titles, programming languages, frameworks, tools
+- Check the ENTIRE document including: summary, experience section, projects, education, skills section
+
 Return ONLY the JSON object, no markdown formatting, no explanations.`
           },
           {
             role: "user",
-            content: `Parse this resume (${fileName}):\n\n${textContent}\n\nExtract all visible text content and parse the information. For PDFs and formatted documents, look for text patterns even if formatting characters are present.`
+            content: `Parse this resume thoroughly and extract ALL available information:\n\n${textContent}`
           }
         ],
       }),
