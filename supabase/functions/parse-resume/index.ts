@@ -38,57 +38,21 @@ serve(async (req) => {
 
     console.log("File downloaded, size:", fileData.size);
 
-    let textContent: string;
+    // Convert file to base64 for AI processing
+    const arrayBuffer = await fileData.arrayBuffer();
+    const base64Data = btoa(
+      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
 
-    // Extract text based on file type
-    if (fileType === "application/pdf") {
-      try {
-        // Use pdf-parse from npm via esm.sh for PDF extraction
-        const pdfParse = (await import("https://esm.sh/pdf-parse@1.1.1")).default;
-        const arrayBuffer = await fileData.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        const pdfData = await pdfParse(uint8Array);
-        textContent = pdfData.text;
-        console.log("PDF text extracted, length:", textContent.length, "pages:", pdfData.numpages);
-      } catch (pdfError) {
-        console.error("PDF extraction error:", pdfError);
-        throw new Error("Failed to extract text from PDF. The file may be encrypted or corrupted.");
-      }
-    } else if (fileType === "text/plain") {
-      textContent = await fileData.text();
-    } else if (
-      fileType === "application/msword" ||
-      fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ) {
-      try {
-        // For .docx files, use mammoth
-        if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-          const mammoth = await import("https://esm.sh/mammoth@1.8.0");
-          const arrayBuffer = await fileData.arrayBuffer();
-          const result = await mammoth.extractRawText({ arrayBuffer });
-          textContent = result.value;
-          console.log("DOCX text extracted, length:", textContent.length);
-        } else {
-          // For .doc files, try to read as text (limited support)
-          textContent = await fileData.text();
-          console.log("DOC file read as text, length:", textContent.length);
-        }
-      } catch (docError) {
-        console.error("Word document extraction error:", docError);
-        throw new Error("Failed to extract text from Word document");
-      }
-    } else {
-      textContent = await fileData.text();
+    console.log("File converted to base64, length:", base64Data.length);
+
+    // Determine mime type
+    let mimeType = fileType;
+    if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     }
 
-    if (!textContent || textContent.trim().length < 50) {
-      console.warn("Extracted text is too short or empty. Preview:", textContent?.substring(0, 200));
-      throw new Error("Could not extract readable text from the document. Please ensure the file is not corrupted, encrypted, or password-protected.");
-    }
-
-    console.log("Content preview (first 500 chars):", textContent.substring(0, 500));
-
-    // Call Lovable AI Gateway with Gemini Flash
+    // Call Lovable AI Gateway with Gemini Flash - it can read PDFs and documents natively
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -100,7 +64,7 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are an expert resume parser. Extract structured information from resumes and return ONLY valid JSON.
+            content: `You are an expert resume parser. Extract structured information from the document and return ONLY valid JSON.
             
 Return format:
 {
@@ -115,19 +79,30 @@ Return format:
 }
 
 CRITICAL INSTRUCTIONS:
-- Extract ALL information present in the resume
-- For experience: count the TOTAL years based on all work/internship/project dates. If they are a student with no work experience, set to 0.
-- For skills: extract ALL technical and soft skills mentioned anywhere in the resume
-- For education: include ALL degrees, even if currently enrolled or in progress
-- Be thorough - do not return null/empty values if information clearly exists in the text
-- Look carefully for: name (usually at top), email addresses, phone numbers, university names, job titles, programming languages, frameworks, tools
+- Extract ALL information present in the resume/document
+- For experience: count the TOTAL years based on all work/internship/project dates. If student with no work experience, set to 0.
+- For skills: extract ALL technical and soft skills mentioned anywhere in the document
+- For education: include ALL degrees, even if in progress or currently enrolled
+- Be thorough - do not return null/empty values if information exists
+- Look carefully for: name (usually at top), email addresses, phone numbers, university names, job titles, technologies, programming languages
 - Check the ENTIRE document including: summary, experience section, projects, education, skills section
 
 Return ONLY the JSON object, no markdown formatting, no explanations.`
           },
           {
             role: "user",
-            content: `Parse this resume thoroughly and extract ALL available information:\n\n${textContent}`
+            content: [
+              {
+                type: "text",
+                text: `Parse this resume (${fileName}) and extract ALL available information. Be thorough and check every section.`
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Data}`
+                }
+              }
+            ]
           }
         ],
       }),
@@ -151,7 +126,7 @@ Return ONLY the JSON object, no markdown formatting, no explanations.`
         );
       }
       
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error(`AI Gateway error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -160,6 +135,8 @@ Return ONLY the JSON object, no markdown formatting, no explanations.`
     if (!content) {
       throw new Error("No content in AI response");
     }
+
+    console.log("AI response received, length:", content.length);
 
     // Clean and parse JSON response
     const cleanContent = content.trim().replace(/```json\n?|\n?```/g, "");
