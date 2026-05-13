@@ -206,8 +206,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Contact
 
+**Muhammad Hashim** — BS Artificial Intelligence, GIK Institute (2026)
+📧 muhammad808alvi@gmail.com · 🔗 [github.com/MuhammadHashimRN](https://github.com/MuhammadHashimRN)
+
 For questions or support, please open an issue on GitHub.
-
----
-
-**Made with ❤️ for better recruitment**
